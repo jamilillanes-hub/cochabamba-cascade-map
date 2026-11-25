@@ -1,14 +1,18 @@
-# Welcome to your Lovable project
+# Cochabamba Cascade Map
+
+Crea una app que con las especificasiones del documento (el mapa tien que poder moverse libremente y no de forma estatica, utiliza la imagen del mapa como referencia de como quiero que se vea y al tocar uno tienen que verases sus municipios y al tocar el municipio tienen que apreser los distritos
 
 This project was built with [Lovable](https://lovable.dev).
 
+**Live app**: https://cochabamba-cascade-map.lovable.app
+
 ## Build with Lovable
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+Continue developing this project in the [Lovable editor](https://lovable.dev/projects/45af6369-3e51-424e-ba3f-8dd877f09b3b).
 
 - **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+- **Stay in sync**: every change made in Lovable is committed straight to this repository.
+- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
 
 ## Development
 
@@ -20,10 +24,3 @@ cd <repository-name>
 npm i
 npm run dev
 ```
-
-## Built with
-
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
