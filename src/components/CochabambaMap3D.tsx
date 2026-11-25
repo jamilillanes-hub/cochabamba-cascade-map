@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Compass,
   ZoomIn,
@@ -14,7 +15,12 @@ import {
   Search,
   X,
   AlertTriangle,
+  Sparkles,
+  Send,
+  Loader2,
 } from "lucide-react";
+import { toast } from "sonner";
+import { askZoneAssistant } from "@/lib/zone-assistant.functions";
 import {
   COCHABAMBA_PROVINCES,
   DISTRICT_COLORS,
@@ -101,6 +107,17 @@ export function CochabambaMap3D({
   const [selectedProvId, setSelectedProvId] = useState<string | null>(null);
   const [selectedMunId, setSelectedMunId] = useState<string | null>(null);
   const [selectedDistId, setSelectedDistId] = useState<string | null>(null);
+
+  // AI Zone Assistant state
+  const askZoneFn = useServerFn(askZoneAssistant);
+  const [zoneQuestion, setZoneQuestion] = useState("");
+  const [askingZone, setAskingZone] = useState(false);
+  const [zoneAnswer, setZoneAnswer] = useState<{
+    answer: string;
+    zoneLabel: string;
+    reportsAnalyzed: number;
+    alertsAnalyzed: number;
+  } | null>(null);
 
   // Drag tracking
   const dragRef = useRef<{
@@ -289,10 +306,38 @@ export function CochabambaMap3D({
     setSelectedDistId(null);
     setActiveBeaconId(null);
     setTooltip(null);
+    setZoneAnswer(null);
     // Gently center toward selected province
     const [cx, cy] = polyCentroid(prov.polygon);
     setPan({ x: (500 - cx) * 1.1, y: (360 - cy) * 0.9 });
     setZoom((z) => clamp(Math.max(z, 1.55), MIN_ZOOM, MAX_ZOOM));
+  };
+
+  const handleAskZone = async (customQuestion?: string) => {
+    if (!selectedProvince) return;
+    const q = (customQuestion ?? zoneQuestion).trim();
+    if (q.length < 4) {
+      toast.error("Escribe una pregunta más clara sobre esta zona.");
+      return;
+    }
+    setAskingZone(true);
+    try {
+      const res = await askZoneFn({
+        data: {
+          provinciaId: selectedProvince.id,
+          provinciaNombre: selectedProvince.name,
+          municipioNombre: selectedMunicipality?.name,
+          distritoNombre: selectedDistrict?.name,
+          pregunta: q,
+        },
+      });
+      setZoneAnswer(res);
+      if (!customQuestion) setZoneQuestion("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo consultar al asistente IA.");
+    } finally {
+      setAskingZone(false);
+    }
   };
 
   const handleMunicipalityClick = (mun: MunicipalityGeo) => {
@@ -1048,6 +1093,70 @@ export function CochabambaMap3D({
               </div>
             )}
           </>
+        )}
+
+        {/* AI Zone Q&A Assistant (visible whenever a zone is selected) */}
+        {selectedProvince && (
+          <div className="mt-3 border-t border-border/70 pt-3 space-y-2.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+              <Sparkles className="h-3.5 w-3.5" />
+              <span>Consultar IA sobre esta zona</span>
+            </div>
+
+            <div className="flex flex-wrap gap-1">
+              {[
+                "¿Qué reportes recientes hay aquí?",
+                "¿Qué precauciones debo tomar?",
+              ].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  disabled={askingZone}
+                  onClick={() => void handleAskZone(preset)}
+                  className="rounded-full bg-secondary/80 px-2.5 py-1 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleAskZone();
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                value={zoneQuestion}
+                onChange={(e) => setZoneQuestion(e.target.value)}
+                placeholder={`Pregunta sobre ${selectedDistrict?.code ?? selectedMunicipality?.name ?? selectedProvince.name}...`}
+                className="h-8 flex-1 rounded-xl border border-input bg-secondary/70 px-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <button
+                type="submit"
+                disabled={askingZone || zoneQuestion.trim().length < 4}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground disabled:opacity-50"
+                title="Enviar pregunta"
+              >
+                {askingZone ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              </button>
+            </form>
+
+            {zoneAnswer && (
+              <div className="rounded-xl border border-primary/30 bg-background/70 p-3 text-xs space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span className="font-semibold text-primary truncate">{zoneAnswer.zoneLabel}</span>
+                  <span className="shrink-0">
+                    {zoneAnswer.reportsAnalyzed} rep · {zoneAnswer.alertsAnalyzed} alertas
+                  </span>
+                </div>
+                <p className="text-foreground/95 leading-relaxed whitespace-pre-wrap">
+                  {zoneAnswer.answer}
+                </p>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
