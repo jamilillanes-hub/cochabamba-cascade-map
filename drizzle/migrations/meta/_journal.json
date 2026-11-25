@@ -8,6 +8,13 @@
       "when": 1795573422149,
       "tag": "0000_create_comunidad_segura_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795574084114,
+      "tag": "0001_tighten_rls_select_policies",
+      "breakpoints": true
     }
   ]
 }
