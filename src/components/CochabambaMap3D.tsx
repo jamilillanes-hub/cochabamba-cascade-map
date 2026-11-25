@@ -9,6 +9,11 @@ import {
   MapPin,
   Building2,
   Palette,
+  Move,
+  Orbit,
+  Search,
+  X,
+  AlertTriangle,
 } from "lucide-react";
 import {
   COCHABAMBA_PROVINCES,
@@ -75,11 +80,24 @@ export function CochabambaMap3D({
   const [zoom, setZoom] = useState(1.05);
   const [pitch, setPitch] = useState(32); // 0° top-down to 68° oblique 3D
   const [yaw, setYaw] = useState(-6); // 360° free rotation
+  const [dragTool, setDragTool] = useState<"pan" | "orbit">("pan");
 
   // Map mode & drill-down state
   const [activeIndex, setActiveIndex] = useState<IndexKey>("indice_general");
   const [colorMode, setColorMode] = useState<"reference" | "index">("reference");
   const [hoveredProvId, setHoveredProvId] = useState<string | null>(null);
+  const [hoveredMunId, setHoveredMunId] = useState<string | null>(null);
+  const [hoveredDistId, setHoveredDistId] = useState<string | null>(null);
+  const [tooltip, setTooltip] = useState<{
+    x: number;
+    y: number;
+    title: string;
+    subtitle: string;
+    score: number;
+    hint: string;
+  } | null>(null);
+  const [activeBeaconId, setActiveBeaconId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedProvId, setSelectedProvId] = useState<string | null>(null);
   const [selectedMunId, setSelectedMunId] = useState<string | null>(null);
   const [selectedDistId, setSelectedDistId] = useState<string | null>(null);
@@ -203,7 +221,7 @@ export function CochabambaMap3D({
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest("[data-map-ui='true']")) return;
-    const isOrbit = e.button === 2 || e.shiftKey;
+    const isOrbit = dragTool === "orbit" || e.button === 2 || e.shiftKey;
     dragRef.current = {
       active: true,
       mode: isOrbit ? "orbit" : "pan",
@@ -219,6 +237,12 @@ export function CochabambaMap3D({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (tooltip && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setTooltip((prev) =>
+        prev ? { ...prev, x: e.clientX - rect.left, y: e.clientY - rect.top } : null,
+      );
+    }
     if (!dragRef.current.active) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
@@ -248,6 +272,8 @@ export function CochabambaMap3D({
     setSelectedProvId(null);
     setSelectedMunId(null);
     setSelectedDistId(null);
+    setActiveBeaconId(null);
+    setSearchQuery("");
   };
 
   const getProvinceScore = (provId: string): number => {
@@ -261,6 +287,8 @@ export function CochabambaMap3D({
     setSelectedProvId(prov.id);
     setSelectedMunId(null);
     setSelectedDistId(null);
+    setActiveBeaconId(null);
+    setTooltip(null);
     // Gently center toward selected province
     const [cx, cy] = polyCentroid(prov.polygon);
     setPan({ x: (500 - cx) * 1.1, y: (360 - cy) * 0.9 });
@@ -271,9 +299,44 @@ export function CochabambaMap3D({
     if (dragRef.current.moved) return;
     setSelectedMunId(mun.id);
     setSelectedDistId(null);
+    setTooltip(null);
     const [cx, cy] = polyCentroid(mun.polygon);
     setPan({ x: (500 - cx) * 1.65, y: (360 - cy) * 1.35 });
     setZoom((z) => clamp(Math.max(z, 2.2), MIN_ZOOM, MAX_ZOOM));
+  };
+
+  const activeBeacon = useMemo(
+    () => MAP_BEACONS.find((b) => b.id === activeBeaconId) ?? null,
+    [activeBeaconId],
+  );
+
+  const filteredProvinces = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return COCHABAMBA_PROVINCES;
+    return COCHABAMBA_PROVINCES.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        p.municipalities.some((m) => m.name.toLowerCase().includes(q)),
+    );
+  }, [searchQuery]);
+
+  const showHoverTooltip = (
+    e: React.MouseEvent,
+    title: string,
+    subtitle: string,
+    score: number,
+    hint: string,
+  ) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    setTooltip({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+      title,
+      subtitle,
+      score,
+      hint,
+    });
   };
 
   // Histogram data for bottom-right card
@@ -432,6 +495,16 @@ export function CochabambaMap3D({
               <filter id="prov-glow" x="-15%" y="-15%" width="130%" height="130%">
                 <feDropShadow dx="0" dy="10" stdDeviation="8" floodColor="#000000" floodOpacity="0.65" />
               </filter>
+              {selectedProvince && (
+                <clipPath id={`clip-prov-${selectedProvince.id}`}>
+                  <polygon points={polyPoints(selectedProvince.polygon, -14)} />
+                </clipPath>
+              )}
+              {selectedProvince && selectedMunicipality && (
+                <clipPath id={`clip-mun-${selectedMunicipality.id}`}>
+                  <polygon points={polyPoints(selectedProvince.polygon, -18)} />
+                </clipPath>
+              )}
             </defs>
 
             {/* Subtle Topographic Contour Rings */}
@@ -490,8 +563,20 @@ export function CochabambaMap3D({
                 return (
                   <g
                     key={prov.id}
-                    onMouseEnter={() => setHoveredProvId(prov.id)}
-                    onMouseLeave={() => setHoveredProvId(null)}
+                    onMouseEnter={(e) => {
+                      setHoveredProvId(prov.id);
+                      showHoverTooltip(
+                        e,
+                        prov.name,
+                        `${prov.municipalities.length} municipios · Cap. ${prov.capital}`,
+                        score,
+                        "Clic para ver municipios",
+                      );
+                    }}
+                    onMouseLeave={() => {
+                      setHoveredProvId(null);
+                      setTooltip(null);
+                    }}
                     onClick={() => handleProvinceClick(prov)}
                     className="cursor-pointer transition-opacity duration-300"
                   >
@@ -524,9 +609,10 @@ export function CochabambaMap3D({
 
             {/* Level 2: Municipalities inside the Selected Province */}
             {selectedProvince && (
-              <g>
+              <g clipPath={`url(#clip-prov-${selectedProvince.id})`}>
                 {selectedProvince.municipalities.map((mun) => {
                   const isMunSelected = selectedMunId === mun.id;
+                  const isMunHovered = hoveredMunId === mun.id;
                   const munDimmed = selectedMunId !== null && !isMunSelected;
                   const rc = getRiskColors(mun.riskScore);
                   const [mx, my] = polyCentroid(mun.polygon);
@@ -534,6 +620,20 @@ export function CochabambaMap3D({
                   return (
                     <g
                       key={mun.id}
+                      onMouseEnter={(e) => {
+                        setHoveredMunId(mun.id);
+                        showHoverTooltip(
+                          e,
+                          mun.name,
+                          `${mun.districts.length} distritos · ${mun.population} hab.`,
+                          mun.riskScore,
+                          "Clic para ver distritos",
+                        );
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredMunId(null);
+                        setTooltip(null);
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleMunicipalityClick(mun);
@@ -543,9 +643,9 @@ export function CochabambaMap3D({
                       <polygon
                         points={polyPoints(mun.polygon, -14)}
                         fill={munDimmed ? "#1e293b" : rc.top}
-                        fillOpacity={munDimmed ? 0.72 : 0.92}
-                        stroke={isMunSelected ? "#FBBF24" : "#FFFFFF"}
-                        strokeWidth={isMunSelected ? 2.2 : 1.2}
+                        fillOpacity={munDimmed ? 0.65 : isMunHovered ? 1 : 0.9}
+                        stroke={isMunSelected || isMunHovered ? "#FBBF24" : "#FFFFFF"}
+                        strokeWidth={isMunSelected || isMunHovered ? 2.2 : 1.2}
                         strokeLinejoin="round"
                       />
                       {!selectedMunicipality && (
@@ -569,15 +669,30 @@ export function CochabambaMap3D({
 
             {/* Level 3: Districts / Comunas inside the Selected Municipality */}
             {selectedMunicipality && (
-              <g>
+              <g clipPath={`url(#clip-mun-${selectedMunicipality.id})`}>
                 {selectedMunicipality.districts.map((dist) => {
                   const dc = DISTRICT_COLORS[dist.type];
                   const isDistSelected = selectedDistId === dist.id;
+                  const isDistHovered = hoveredDistId === dist.id;
                   const [dx, dy] = polyCentroid(dist.polygon);
 
                   return (
                     <g
                       key={dist.id}
+                      onMouseEnter={(e) => {
+                        setHoveredDistId(dist.id);
+                        showHoverTooltip(
+                          e,
+                          `${dist.code} · ${dist.name}`,
+                          `${dc.label} · ${dist.population} hab.`,
+                          dist.riskScore,
+                          "Clic para seleccionar distrito",
+                        );
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredDistId(null);
+                        setTooltip(null);
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedDistId(dist.id);
@@ -587,9 +702,9 @@ export function CochabambaMap3D({
                       <polygon
                         points={polyPoints(dist.polygon, -18)}
                         fill={dc.top}
-                        fillOpacity={isDistSelected ? 1 : 0.9}
-                        stroke={isDistSelected ? "#FBBF24" : "#FFFFFF"}
-                        strokeWidth={isDistSelected ? 2 : 0.9}
+                        fillOpacity={isDistSelected || isDistHovered ? 1 : 0.88}
+                        stroke={isDistSelected || isDistHovered ? "#FBBF24" : "#FFFFFF"}
+                        strokeWidth={isDistSelected || isDistHovered ? 2 : 0.9}
                       />
                       <text
                         x={dx}
@@ -632,7 +747,14 @@ export function CochabambaMap3D({
             {/* 3D Volumetric Beacons */}
             {!selectedMunicipality &&
               MAP_BEACONS.map((b) => (
-                <g key={b.id} pointerEvents="none">
+                <g
+                  key={b.id}
+                  className="cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveBeaconId(activeBeaconId === b.id ? null : b.id);
+                  }}
+                >
                   <circle
                     cx={b.x}
                     cy={b.y}
@@ -650,7 +772,14 @@ export function CochabambaMap3D({
                     stroke="rgba(255,255,255,0.7)"
                     strokeWidth="1.2"
                   />
-                  <circle cx={b.x} cy={b.y - 28} r="5.5" fill={b.color} stroke="#FFFFFF" strokeWidth="1.4" />
+                  <circle
+                    cx={b.x}
+                    cy={b.y - 28}
+                    r="7"
+                    fill={b.color}
+                    stroke="#FFFFFF"
+                    strokeWidth="1.6"
+                  />
                 </g>
               ))}
 
@@ -694,6 +823,60 @@ export function CochabambaMap3D({
         </div>
       </div>
 
+      {/* Floating Interactive Hover Tooltip */}
+      {tooltip && !dragRef.current.active && (
+        <div
+          className="pointer-events-none absolute z-30 w-56 rounded-xl glass-panel px-3 py-2.5 text-xs shadow-2xl"
+          style={{
+            left: Math.min(tooltip.x + 16, (containerRef.current?.clientWidth ?? 900) - 240),
+            top: Math.max(16, tooltip.y - 16),
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-display font-bold text-foreground truncate">{tooltip.title}</span>
+            <span
+              className="rounded px-1.5 py-0.5 font-mono text-[10px] font-bold text-background"
+              style={{ backgroundColor: getRiskColors(tooltip.score).top }}
+            >
+              {tooltip.score}
+            </span>
+          </div>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{tooltip.subtitle}</p>
+          <p className="mt-1 text-[10px] font-medium text-primary">{tooltip.hint}</p>
+        </div>
+      )}
+
+      {/* Clicked 3D Beacon Popup */}
+      {activeBeacon && (
+        <div
+          data-map-ui="true"
+          className="pointer-events-auto absolute top-20 right-5 z-30 w-72 rounded-2xl glass-panel border-primary/40 p-4 space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-xs font-bold text-primary">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Baliza Activa
+            </span>
+            <button
+              onClick={() => setActiveBeaconId(null)}
+              className="rounded-lg p-1 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+          <h3 className="font-display text-sm font-bold text-foreground">{activeBeacon.label}</h3>
+          <button
+            onClick={() => {
+              const prov = COCHABAMBA_PROVINCES.find((p) => p.id === activeBeacon.provinceId);
+              if (prov) handleProvinceClick(prov);
+            }}
+            className="w-full rounded-xl bg-primary/20 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/30 transition-colors"
+          >
+            Explorar provincia en el mapa
+          </button>
+        </div>
+      )}
+
       {/* Left Inspector Panel: Municipalities & Districts Drill-down */}
       <div
         data-map-ui="true"
@@ -709,12 +892,17 @@ export function CochabambaMap3D({
                 3D Libre
               </span>
             </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Arrastra para moverte libremente, usa la rueda para acercar, o Shift + arrastre para
-              girar 360° e inclinar. Toca cualquier provincia para ver sus municipios.
-            </p>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar provincia o municipio..."
+                className="h-8 w-full rounded-xl border border-input bg-secondary/70 pl-8 pr-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
             <div className="grid grid-cols-2 gap-1.5 pt-1">
-              {COCHABAMBA_PROVINCES.map((prov) => {
+              {filteredProvinces.map((prov) => {
                 const score = getProvinceScore(prov.id);
                 const rc = getRiskColors(score);
                 return (
@@ -869,6 +1057,18 @@ export function CochabambaMap3D({
         className="pointer-events-auto absolute bottom-5 left-4 z-20 flex items-center gap-1.5 rounded-full glass-pill p-1.5"
       >
         <button
+          onClick={() => setDragTool(dragTool === "pan" ? "orbit" : "pan")}
+          className={`flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+            dragTool === "orbit"
+              ? "bg-primary text-primary-foreground"
+              : "bg-secondary/80 text-foreground hover:bg-accent"
+          }`}
+          title="Cambiar entre mover (arrastrar) y girar/inclinar en 3D"
+        >
+          {dragTool === "orbit" ? <Orbit className="h-3.5 w-3.5" /> : <Move className="h-3.5 w-3.5" />}
+          <span>{dragTool === "orbit" ? "Girar 3D" : "Mover"}</span>
+        </button>
+        <button
           onClick={() => setZoom((z) => clamp(z * 1.2, MIN_ZOOM, MAX_ZOOM))}
           className="rounded-full p-2 text-foreground hover:bg-accent"
           title="Acercar (+)"
@@ -923,16 +1123,30 @@ export function CochabambaMap3D({
         </div>
         <div className="flex h-16 items-end gap-1">
           {histogramItems.map((item) => (
-            <div key={item.id} className="flex flex-1 flex-col items-center gap-1">
+            <button
+              key={item.id}
+              onClick={() => {
+                if (!selectedProvince) {
+                  const prov = COCHABAMBA_PROVINCES.find((p) => p.id === item.id);
+                  if (prov) handleProvinceClick(prov);
+                } else if (!selectedMunicipality) {
+                  const mun = selectedProvince.municipalities.find((m) => m.id === item.id);
+                  if (mun) handleMunicipalityClick(mun);
+                } else {
+                  setSelectedDistId(item.id);
+                }
+              }}
+              className="group flex flex-1 flex-col items-center justify-end h-full cursor-pointer"
+              title={`${item.label}: ${item.score} (clic para enfocar)`}
+            >
               <div
-                className="w-full rounded-t-sm transition-all duration-300"
+                className="w-full rounded-t-sm transition-all duration-300 group-hover:brightness-125 group-hover:scale-y-105"
                 style={{
                   height: `${Math.max(12, Math.round((item.score / 100) * 52))}px`,
                   backgroundColor: item.color,
                 }}
-                title={`${item.label}: ${item.score}`}
               />
-            </div>
+            </button>
           ))}
         </div>
         <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
