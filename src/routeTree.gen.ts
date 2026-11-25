@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as ComunidadRouteImport } from './routes/comunidad'
+import { Route as EmergenciasRouteImport } from './routes/emergencias'
+import { Route as ReportesRouteImport } from './routes/reportes'
+import { Route as VoluntariadoRouteImport } from './routes/voluntariado'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComunidadRoute = ComunidadRouteImport.update({
+  id: '/comunidad',
+  path: '/comunidad',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmergenciasRoute = EmergenciasRouteImport.update({
+  id: '/emergencias',
+  path: '/emergencias',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportesRoute = ReportesRouteImport.update({
+  id: '/reportes',
+  path: '/reportes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VoluntariadoRoute = VoluntariadoRouteImport.update({
+  id: '/voluntariado',
+  path: '/voluntariado',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/comunidad': typeof ComunidadRoute
+  '/emergencias': typeof EmergenciasRoute
+  '/reportes': typeof ReportesRoute
+  '/voluntariado': typeof VoluntariadoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/comunidad': typeof ComunidadRoute
+  '/emergencias': typeof EmergenciasRoute
+  '/reportes': typeof ReportesRoute
+  '/voluntariado': typeof VoluntariadoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/comunidad': typeof ComunidadRoute
+  '/emergencias': typeof EmergenciasRoute
+  '/reportes': typeof ReportesRoute
+  '/voluntariado': typeof VoluntariadoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/comunidad'
+    | '/emergencias'
+    | '/reportes'
+    | '/voluntariado'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/comunidad'
+    | '/emergencias'
+    | '/reportes'
+    | '/voluntariado'
+  id:
+    | '__root__'
+    | '/'
+    | '/auth'
+    | '/comunidad'
+    | '/emergencias'
+    | '/reportes'
+    | '/voluntariado'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthRoute: typeof AuthRoute
+  ComunidadRoute: typeof ComunidadRoute
+  EmergenciasRoute: typeof EmergenciasRoute
+  ReportesRoute: typeof ReportesRoute
+  VoluntariadoRoute: typeof VoluntariadoRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comunidad': {
+      id: '/comunidad'
+      path: '/comunidad'
+      fullPath: '/comunidad'
+      preLoaderRoute: typeof ComunidadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/emergencias': {
+      id: '/emergencias'
+      path: '/emergencias'
+      fullPath: '/emergencias'
+      preLoaderRoute: typeof EmergenciasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reportes': {
+      id: '/reportes'
+      path: '/reportes'
+      fullPath: '/reportes'
+      preLoaderRoute: typeof ReportesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/voluntariado': {
+      id: '/voluntariado'
+      path: '/voluntariado'
+      fullPath: '/voluntariado'
+      preLoaderRoute: typeof VoluntariadoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthRoute: AuthRoute,
+  ComunidadRoute: ComunidadRoute,
+  EmergenciasRoute: EmergenciasRoute,
+  ReportesRoute: ReportesRoute,
+  VoluntariadoRoute: VoluntariadoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

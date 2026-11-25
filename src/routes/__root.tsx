@@ -12,6 +12,11 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { Toaster } from "sonner";
+import { AuthProvider } from "@/hooks/useAuth";
+import { AppHeader } from "@/components/AppHeader";
+import { FloatingSosButton } from "@/components/FloatingSosButton";
+import cochabambaFondo from "@/assets/cochabamba-fondo.png.asset.json";
 
 function NotFoundComponent() {
   return (
@@ -75,25 +80,32 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
-    // Replace these placeholders with the app's name and description when first building the app.
-    // Each content route, / included, must still set its own head(). Never add og:image or
-    // twitter:image here: every page without its own would inherit the root's preview image.
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Comunidad Segura · Cochabamba" },
+      {
+        name: "description",
+        content:
+          "Plataforma geoespacial 3D de seguridad ciudadana, reportes con IA, voluntariado y emergencias 24/7 para Cochabamba, Bolivia.",
+      },
+      { property: "og:title", content: "Comunidad Segura · Cochabamba" },
+      {
+        property: "og:description",
+        content:
+          "Mapa 3D interactivo de las 16 provincias de Cochabamba, reportes ciudadanos con IA, voluntariado y botón SOS 24/7.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap",
       },
       { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
@@ -123,8 +135,34 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
+      <AuthProvider>
+        <div className="relative min-h-screen w-full overflow-x-hidden bg-background text-foreground">
+          {/* Atmospheric Cochabamba Night Panorama Background */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat"
+            style={{ backgroundImage: `url(${cochabambaFondo.url})` }}
+          />
+          <div
+            aria-hidden="true"
+            className="pointer-events-none fixed inset-0 z-0"
+            style={{
+              background:
+                "radial-gradient(ellipse at 50% 35%, rgba(10,13,22,0.74) 0%, rgba(8,9,14,0.88) 65%, rgba(6,7,11,0.95) 100%)",
+            }}
+          />
+
+          <div className="relative z-10 flex min-h-screen flex-col">
+            <AppHeader />
+            <main className="flex-1">
+              <Outlet />
+            </main>
+          </div>
+
+          <FloatingSosButton />
+          <Toaster position="top-right" theme="dark" richColors />
+        </div>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
